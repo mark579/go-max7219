@@ -56,6 +56,21 @@ func NewDevice(cascaded int) *Device {
 	return this
 }
 
+func (d *Device) BufferToMatrix() [][8]byte {
+	matrix := make([][8]byte, d.cascaded)
+	maxtrixNum := 0
+	j := 0
+	for i := range d.buffer {
+		if i%8 == 0 && i != 0 {
+			maxtrixNum++
+			j = 0
+		}
+		matrix[maxtrixNum][j] = d.buffer[i]
+		j++
+	}
+	return matrix
+}
+
 func (this *Device) GetCascadeCount() int {
 	return this.cascaded
 }
@@ -100,18 +115,32 @@ func (this *Device) Command(reg Max7219Reg, value byte) error {
 	return nil
 }
 
-func (this *Device) sendBufferLine(position int) error {
+/*
+* Transmits a line of data in the buffer over SPI
+* for the given position in the buffer
+* A buffer line follows this format
+* [Matrix1RowNum, Matrix1Value, Matrix2RowNum, Matrix2Value, ...]
+* MatrixXRowNum - The matrix in the cascaed order at the given RowNum in the display
+*                 The row is the set of 8 leds across matrix
+* MatrixXValue - The byte which represents which LED should be lit for that row.
+*  E.g. [1, 0, 1, 127, 1, 85]
+*     Matrix 1             Matrix 2           Matrix 3
+*  0 0 0 0 0 0 0 (0)  1 1 1 1 1 1 1 (127) 1 0 1 0 1 0 1 (85)
+*  ...
+ */
+
+func (d *Device) sendBufferLine(position int) error {
 	reg := MAX7219_REG_DIGIT0 + position
 	//fmt.Printf("Register: %#x\n", reg)
-	buf := make([]byte, this.cascaded*2)
-	for i := 0; i < this.cascaded; i++ {
-		b := this.buffer[i*MAX7219_DIGIT_COUNT+position]
+	buf := make([]byte, d.cascaded*2)
+	for i := 0; i < d.cascaded; i++ {
+		b := d.buffer[i*MAX7219_DIGIT_COUNT+position]
 		//fmt.Printf("Buffer value: %#x\n", b)
 		buf[i*2] = byte(reg)
 		buf[i*2+1] = b
 	}
-	log.Debug("Send to bus: %v\n", buf)
-	_, err := this.spi.Xfer(buf)
+	// log.Debug("Send to bus: %v\n", buf)
+	_, err := d.spi.Xfer(buf)
 	if err != nil {
 		return err
 	}

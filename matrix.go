@@ -15,17 +15,17 @@ type Matrix struct {
 }
 
 func NewMatrix(cascaded int) *Matrix {
-	this := &Matrix{}
-	this.Device = NewDevice(cascaded)
-	return this
+	m := &Matrix{}
+	m.Device = NewDevice(cascaded)
+	return m
 }
 
-func (this *Matrix) Open(spibus int, spidevice int, brightness byte) error {
-	return this.Device.Open(spibus, spidevice, brightness)
+func (m *Matrix) Open(spibus int, spidevice int, brightness byte) error {
+	return m.Device.Open(spibus, spidevice, brightness)
 }
 
-func (this *Matrix) Close() {
-	this.Device.Close()
+func (m *Matrix) Close() {
+	m.Device.Close()
 }
 
 func getLineCondense(line byte) int {
@@ -108,14 +108,6 @@ func preparePatterns(text []byte, font [][]byte,
 	return buf
 }
 
-func repeat(b byte, count int) []byte {
-	buf := make([]byte, count)
-	for i := 0; i < len(buf); i++ {
-		buf[i] = b
-	}
-	return buf
-}
-
 func isEmpty(pattern []byte) bool {
 	for _, b := range pattern {
 		if b != 0 {
@@ -128,7 +120,7 @@ func isEmpty(pattern []byte) bool {
 // Output unicode char to the led matrix.
 // Unicode char transforms to ascii code based on
 // information taken from font.GetCodePage() call.
-func (this *Matrix) OutputChar(cascadeId int, font Font,
+func (m *Matrix) OutputChar(cascadeId int, font Font,
 	char rune, redraw bool) error {
 	text := string(char)
 	b := convertUnicodeToAscii(text, font.GetCodePage())
@@ -139,7 +131,7 @@ func (this *Matrix) OutputChar(cascadeId int, font Font,
 		false)
 	for i, value := range buf {
 		//fmt.Printf("value: %#x\n", value)
-		err := this.Device.SetBufferLine(cascadeId, i, value, redraw)
+		err := m.Device.SetBufferLine(cascadeId, i, value, redraw)
 		if err != nil {
 			return err
 		}
@@ -148,18 +140,30 @@ func (this *Matrix) OutputChar(cascadeId int, font Font,
 }
 
 // Output ascii code to the led matrix.
-func (this *Matrix) OutputAsciiCode(cascadeId int, font Font,
+func (m *Matrix) OutputAsciiCode(cascadeId int, font Font,
 	asciiCode int, redraw bool) error {
 	patterns := font.GetLetterPatterns()
 	b := patterns[asciiCode]
+	log.Debugf("Ascii Code: %v, Bits: %v", asciiCode, b)
 	for i, value := range b {
-		//fmt.Printf("value: %#x\n", value)
-		err := this.Device.SetBufferLine(cascadeId, i, value, redraw)
+		binaryStr := fmt.Sprintf("% 09b", value)
+		log.Debugf("value: % s\n", binaryStr)
+
+		err := m.Device.SetBufferLine(cascadeId, i, value, redraw)
 		if err != nil {
 			return err
 		}
 	}
+	log.Debugf("Buffer = %v", m.Device.buffer)
 	return nil
+}
+
+// Output current device buffer to log
+// Represent it visually as it actually would
+// on the hardware
+func (m *Matrix) OutputBufferToLog() {
+	matrix := m.Device.BufferToMatrix()
+	log.Debugf("Current Matrix:%v", matrix)
 }
 
 // Convert unicode text to ASCII text
@@ -180,20 +184,20 @@ func convertUnicodeToAscii(text string,
 }
 
 // Show message sliding it by led matrix from the right to left.
-func (this *Matrix) SlideMessage(text string, font Font,
+func (m *Matrix) SlideMessage(text string, font Font,
 	condensePattern bool, pixelDelay time.Duration) error {
 	b := convertUnicodeToAscii(text, font.GetCodePage())
 	buf := preparePatterns(b, font.GetLetterPatterns(),
 		condensePattern)
 	for _, b := range buf {
 		time.Sleep(pixelDelay)
-		err := this.Device.ScrollLeft(true)
+		err := m.Device.ScrollLeft(true)
 		if err != nil {
 			return err
 		}
-		err = this.Device.SetBufferLine(
-			this.Device.GetCascadeCount()-1,
-			this.Device.GetLedLineCount()-1, b, true)
+		err = m.Device.SetBufferLine(
+			m.Device.GetCascadeCount()-1,
+			m.Device.GetLedLineCount()-1, b, true)
 		if err != nil {
 			return err
 		}
